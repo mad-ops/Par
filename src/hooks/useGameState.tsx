@@ -51,6 +51,14 @@ export const useGameState = () => {
                         // Let's assume reset if version mismatch (missing indices).
                         if (parsed.submissionIndices && parsed.submissionIndices.length === parsed.submissions.length) {
                             setSubmissionIndices(parsed.submissionIndices);
+
+                            // Check if game is complete to restore last selection state
+                            // Flatten all to check count
+                            const all = new Set(parsed.submissionIndices.flat());
+                            if (all.size === 25 && parsed.submissionIndices.length > 0) {
+                                // Restore last selection for visual continuity
+                                setSelectedIndices(parsed.submissionIndices[parsed.submissionIndices.length - 1]);
+                            }
                         } else {
                             // If we have submissions but no indices (legacy save), best to reset to avoid "ghost" consumption.
                             setSubmissions([]);

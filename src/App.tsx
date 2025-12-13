@@ -86,7 +86,7 @@ function App() {
       const timer = setTimeout(() => {
         setShowCompletion(true);
         setShowPostGameControls(true);
-      }, 2000); // 2 seconds delay
+      }, 1000); // 1 second delay
       return () => clearTimeout(timer);
     } else {
       setShowCompletion(false);
