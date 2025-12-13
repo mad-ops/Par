@@ -14,6 +14,7 @@ interface PersistedState {
 
 export const useGameState = () => {
     const [dictionary, setDictionary] = useState<Set<string>>(new Set());
+    const [commonWords, setCommonWords] = useState<string[]>([]);
     const [submissions, setSubmissions] = useState<string[]>([]);
     const [submissionIndices, setSubmissionIndices] = useState<number[][]>([]); // New state
     const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
@@ -22,15 +23,18 @@ export const useGameState = () => {
 
     // Initialize
     useEffect(() => {
-        loadDictionary().then(setDictionary);
+        loadDictionary().then(data => {
+            setDictionary(data.allWords);
+            setCommonWords(data.commonWords);
+        });
     }, []);
 
     // Set puzzle based on date
     const today = format(new Date(), 'yyyy-MM-dd');
 
     useEffect(() => {
-        if (dictionary.size > 0) {
-            const p = generatePuzzle(today, dictionary);
+        if (commonWords.length > 0) {
+            const p = generatePuzzle(today, commonWords);
             setPuzzle(p);
 
             // Load saved state
@@ -60,7 +64,7 @@ export const useGameState = () => {
                 }
             }
         }
-    }, [dictionary, today]);
+    }, [commonWords, today]);
 
     // Persist
     useEffect(() => {

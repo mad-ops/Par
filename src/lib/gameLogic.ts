@@ -1,10 +1,10 @@
 import seedrandom from 'seedrandom';
 import type { DailyPuzzle } from '../types';
 
-export const generatePuzzle = (dateString: string, dictionary: Set<string>): DailyPuzzle => {
+export const generatePuzzle = (dateString: string, commonWords: string[]): DailyPuzzle => {
     // Seed using date
     const rng = seedrandom(dateString);
-    const words = Array.from(dictionary);
+    const words = commonWords;
 
     if (words.length < 5) {
         // Fallback if dictionary not loaded

@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 
 
 // Mock dictionary
-const mockDict = new Set(['HELLO', 'WORLD', 'GAMES', 'TESTS', 'CODING']);
+const mockDict = ['HELLO', 'WORLD', 'GAMES', 'TESTS', 'CODING'];
 
 // Generate for today
 const today = format(new Date(), 'yyyy-MM-dd');

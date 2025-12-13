@@ -6,11 +6,12 @@ import { format } from 'date-fns';
 
 async function testValidation() {
     console.log("Loading dictionary...");
-    const dict = await loadDictionary();
+    const data = await loadDictionary();
+    const dict = data.allWords;
     console.log(`Dictionary size: ${dict.size}`);
 
     const today = format(new Date(), 'yyyy-MM-dd');
-    const puzzle = generatePuzzle(today, dict);
+    const puzzle = generatePuzzle(today, data.commonWords);
 
     console.log("Puzzle Letters:", puzzle.letters.join(''));
 
