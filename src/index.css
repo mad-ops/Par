@@ -29,4 +29,11 @@ body {
     color: #1e3a8a !important;
     /* Blue 900 */
   }
+
+  /* Hexagon Shape - Pointy Topped (Corners up/down) */
+  .hexagon-tile {
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    border-radius: 0 !important;
+    /* Hexagons shouldn't have rounded corners visually if clipped */
+  }
 }

@@ -10,7 +10,6 @@ function App() {
     puzzle,
     currentInput,
     submitWord,
-    shuffleBoard,
     resetProgress: originalResetProgress,
     gameState,
     submissions,
@@ -18,7 +17,9 @@ function App() {
     isLoading,
     selectedIndices,
     handleTileClick,
-    clearSelection
+    clearSelection,
+    gameMode, // New export
+    toggleGameMode // New export
   } = useGameState();
 
   const resetProgress = () => {
@@ -150,68 +151,87 @@ function App() {
           onClose={() => setShowCompletion(false)}
           isComplete={gameState.isComplete}
           onRestart={resetProgress}
+          onStartHardMode={toggleGameMode}
+          isHardMode={gameMode === 'hard'}
         />
       )}
 
-      <Header onInfoClick={() => setShowCompletion(true)} score={gameState.score} />
+      <Header
+        onInfoClick={() => setShowCompletion(true)}
+        onHardModeClick={toggleGameMode}
+        score={gameState.score}
+        label={gameMode === 'hard' ? 'SWAPS' : 'SCORE'}
+      />
 
       <main className="flex-1 w-full max-w-lg px-4 py-2 flex flex-col">
         {/* Main Content Area */}
         <div className="flex flex-col items-center justify-start gap-2 flex-grow">
 
-          <InputRow
-            currentInput={currentInput}
-            isError={errorShake}
-            isSuccess={successPop || gameState.isComplete}
-            isWarning={warningShake}
-            placeholder={(!hasInteracted && submissions.length === 0) ? "GUESS" : undefined}
-          />
+          {gameMode !== 'hard' && (
+            <InputRow
+              currentInput={currentInput}
+              isError={errorShake}
+              isSuccess={successPop || gameState.isComplete}
+              isWarning={warningShake}
+              placeholder={(!hasInteracted && submissions.length === 0) ? "GUESS" : undefined}
+            />
+          )}
 
           <GameBoard
             letters={displayLetters}
             selectedIndices={selectedIndices}
             onTileClick={onTileClickWrapped}
+            isHardMode={gameMode === 'hard'}
           />
 
           {/* Count */}
-          <div className="flex items-center justify-center text-xl font-bold uppercase tracking-widest text-slate-500 mt-4" style={{ height: '48px' }}>
-            Count: {submissions.length}
-          </div>
+          {gameMode !== 'hard' && (
+            <div className="flex items-center justify-center text-xl font-bold uppercase tracking-widest text-slate-500 mt-4" style={{ height: '48px' }}>
+              Count: {submissions.length}
+            </div>
+          )}
 
           {/* Control Bar - Dynamic based on state */}
-          <div className="flex justify-center gap-2 w-full max-w-[400px] mt-4 z-10" style={{ gap: '8px' }}>
-            {showPostGameControls ? (
-              <>
-                <button
-                  onClick={resetProgress}
-                  className="flex-1 !h-12 min-h-[48px] bg-slate-200 rounded-xl flex items-center justify-center shadow hover:bg-slate-300 active:bg-slate-400 active:scale-95 transition-all uppercase font-black text-sm tracking-wide text-slate-700 shrink-0"
-                  style={{ height: '48px' }}
-                >
-                  AGAIN
-                </button>
+          {gameMode !== 'hard' && (
+            <div className="flex justify-center gap-2 w-full max-w-[400px] mt-4 z-10" style={{ gap: '8px' }}>
+              {showPostGameControls ? (
+                <>
+                  <button
+                    onClick={resetProgress}
+                    className="flex-1 !h-12 min-h-[48px] bg-slate-200 rounded-xl flex items-center justify-center shadow hover:bg-slate-300 active:bg-slate-400 active:scale-95 transition-all uppercase font-black text-sm tracking-wide text-slate-700 shrink-0"
+                    style={{ height: '48px' }}
+                  >
+                    AGAIN
+                  </button>
 
-                <button
-                  onClick={() => setShowCompletion(true)}
-                  className="flex-1 !h-12 min-h-[48px] bg-slate-200 rounded-xl flex items-center justify-center shadow hover:bg-slate-300 active:bg-slate-400 active:scale-95 transition-all uppercase font-black text-sm tracking-wide text-slate-700 shrink-0"
-                  style={{ height: '48px' }}
-                >
-                  STATS
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={clearSelection}
-                  className="flex-1 !h-12 min-h-[48px] bg-slate-200 rounded-xl flex items-center justify-center shadow hover:bg-slate-300 active:bg-slate-400 active:scale-95 transition-all uppercase font-black text-sm tracking-wide text-slate-700 shrink-0"
-                  style={{ height: '48px' }}
-                  aria-label="Clear Selection"
-                  disabled={isProcessing}
-                >
-                  Clear
-                </button>
-              </>
-            )}
-          </div>
+                  <button
+                    onClick={() => setShowCompletion(true)}
+                    className="flex-1 !h-12 min-h-[48px] bg-slate-200 rounded-xl flex items-center justify-center shadow hover:bg-slate-300 active:bg-slate-400 active:scale-95 transition-all uppercase font-black text-sm tracking-wide text-slate-700 shrink-0"
+                    style={{ height: '48px' }}
+                  >
+                    STATS
+                  </button>
+                </>
+              ) : (
+                gameMode !== 'hard' && (
+                  <>
+                    <button
+                      onClick={() => {
+                        clearSelection();
+                        setHasInteracted(true);
+                      }}
+                      className="flex-1 !h-12 min-h-[48px] bg-slate-200 rounded-xl flex items-center justify-center shadow hover:bg-slate-300 active:bg-slate-400 active:scale-95 transition-all uppercase font-black text-sm tracking-wide text-slate-700 shrink-0"
+                      style={{ height: '48px' }}
+                      aria-label="Clear Selection"
+                      disabled={isProcessing}
+                    >
+                      Clear
+                    </button>
+                  </>
+                )
+              )}
+            </div>
+          )}
 
         </div>
       </main>

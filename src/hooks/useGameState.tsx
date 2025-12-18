@@ -21,6 +21,11 @@ export const useGameState = () => {
     const [puzzle, setPuzzle] = useState<DailyPuzzle | null>(null);
     const [shuffleSeed, setShuffleSeed] = useState(0);
 
+    // Hard Mode State
+    const [gameMode, setGameMode] = useState<'standard' | 'hard'>('standard');
+    const [hardModeBoard, setHardModeBoard] = useState<string[]>([]);
+    const [swapCount, setSwapCount] = useState(0);
+
     // Initialize
     useEffect(() => {
         loadDictionary().then(data => {
@@ -78,9 +83,48 @@ export const useGameState = () => {
     useEffect(() => {
         if (puzzle) {
             const state: PersistedState = { date: today, submissions, submissionIndices };
+            // TODO: Persist hard mode state? For now, transient.
             localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         }
     }, [submissions, submissionIndices, puzzle, today]);
+
+    const toggleGameMode = () => {
+        if (!puzzle) return;
+
+        if (gameMode === 'hard') {
+            // Switch back to standard
+            // Reset hard mode state
+            setHardModeBoard([]);
+            setSwapCount(0);
+            // Reset standard progress as well to start fresh? 
+            // Current "resetProgress" does full wipe.
+            // Let's do a partial reset similar to resetProgress but keeping puzzle
+            setSubmissions([]);
+            setSubmissionIndices([]);
+            setSelectedIndices([]);
+            setShuffleSeed(0);
+            setGameMode('standard');
+        } else {
+            // Start Hard Mode
+            setGameMode('hard');
+            setHardModeBoard([...puzzle.letters]); // Copy initial state
+
+            setSwapCount(0);
+            setSelectedIndices([]); // Clear standard selection
+            // Reset standard progress? User said "new game".
+            setSubmissions([]);
+            setSubmissionIndices([]);
+        }
+    };
+
+    const switchTiles = (indexA: number, indexB: number) => {
+        setHardModeBoard(prev => {
+            const newBoard = [...prev];
+            [newBoard[indexA], newBoard[indexB]] = [newBoard[indexB], newBoard[indexA]];
+            return newBoard;
+        });
+        setSwapCount(prev => prev + 1);
+    };
 
     const submitWord = () => {
         if (!puzzle) return;
@@ -120,6 +164,31 @@ export const useGameState = () => {
     const handleTileClick = (index: number, shouldReset = false) => {
         if (gameState.isComplete) return;
 
+        if (gameMode === 'hard') {
+            // Hard Mode Interaction: Swap
+            if (selectedIndices.length === 0) {
+                // Select first tile
+                setSelectedIndices([index]);
+            } else {
+                const firstIndex = selectedIndices[0];
+                if (firstIndex === index) {
+                    // Deselect if same
+                    setSelectedIndices([]);
+                } else {
+                    // Highlight both
+                    setSelectedIndices([firstIndex, index]);
+
+                    // Delayed Swap
+                    setTimeout(() => {
+                        switchTiles(firstIndex, index);
+                        setSelectedIndices([]);
+                    }, 500);
+                }
+            }
+            return;
+        }
+        if (gameState.isComplete) return;
+
         // Smart Selection Logic
         let targetIndex = index;
         const clickedLetter = displayLetters.find(l => l.id === index);
@@ -143,15 +212,19 @@ export const useGameState = () => {
             return;
         }
 
-        if (selectedIndices.includes(targetIndex)) {
-            if (targetIndex === selectedIndices[selectedIndices.length - 1]) {
-                setSelectedIndices(prev => prev.slice(0, -1));
+        setSelectedIndices(prev => {
+            if (prev.includes(targetIndex)) {
+                if (targetIndex === prev[prev.length - 1]) {
+                    return prev.slice(0, -1);
+                }
+                return prev;
+            } else {
+                if (prev.length < 5) {
+                    return [...prev, targetIndex];
+                }
+                return prev;
             }
-        } else {
-            if (selectedIndices.length < 5) {
-                setSelectedIndices(prev => [...prev, targetIndex]);
-            }
-        }
+        });
     };
 
     const clearSelection = () => {
@@ -170,6 +243,26 @@ export const useGameState = () => {
     const gameState = useMemo(() => {
         if (!puzzle) return { isComplete: false, capturedCounts: {}, score: 0 };
 
+        if (gameMode === 'hard') {
+            let isComplete = false;
+            if (hardModeBoard.length > 0) {
+                isComplete = true;
+                for (let row = 0; row < 5; row++) {
+                    const word = hardModeBoard.slice(row * 5, row * 5 + 5).join('').toUpperCase();
+                    if (!dictionary.has(word)) {
+                        isComplete = false;
+                        break;
+                    }
+                }
+            }
+            return {
+                isComplete,
+                score: swapCount,
+                capturedCounts: {}
+            };
+        }
+
+        // Standard Logic
         // Check completion based on indices coverage (which tracks visual state)
         const allConsumedIndices = new Set(submissionIndices.flat());
         const isComplete = allConsumedIndices.size === 25;
@@ -183,23 +276,44 @@ export const useGameState = () => {
         // Use centralized logic from gameLogic.ts to ensure consistency
         const logicState = calculateLetterUsage(puzzle.letters, allWordsToScore);
 
-        // Check completion based on indices coverage (which tracks visual state)
-        // logicState.isComplete is based on letter counts.
-        // We probably want to trust logicState for score.
-        // For completion, let's keep the index-based check as it's more precise for "filling the board".
-
-
-
         return {
             isComplete,
             score: logicState.score,
             capturedCounts: logicState.capturedCounts
         };
-    }, [puzzle, submissions, submissionIndices, selectedIndices]);
+    }, [puzzle, submissions, submissionIndices, selectedIndices, gameMode, hardModeBoard, swapCount, dictionary]);
 
     const displayLetters = useMemo(() => {
         if (!puzzle) return [];
 
+        if (gameMode === 'hard') {
+            // Hard Mode Logic
+            // 1. Identify valid rows
+            const validIndices = new Set<number>();
+            let validRowCount = 0;
+
+            for (let row = 0; row < 5; row++) {
+                const startIndex = row * 5;
+                const rowLetters = hardModeBoard.slice(startIndex, startIndex + 5);
+                const word = rowLetters.join('').toUpperCase();
+
+                if (dictionary.has(word)) {
+                    validRowCount++;
+                    for (let i = 0; i < 5; i++) {
+                        validIndices.add(startIndex + i);
+                    }
+                }
+            }
+
+            // 2. Map to items
+            return hardModeBoard.map((char, index) => ({
+                char,
+                status: (validIndices.has(index) ? 'consumed' : 'available') as 'consumed' | 'available',
+                id: index
+            }));
+        }
+
+        // Standard Logic
         // Flatten consumed indices for O(1) lookup
         const consumedSet = new Set(submissionIndices.flat());
 
@@ -222,13 +336,18 @@ export const useGameState = () => {
         }
 
         return items;
-    }, [puzzle, submissionIndices, shuffleSeed]);
+    }, [puzzle, submissionIndices, shuffleSeed, gameMode, hardModeBoard, dictionary]);
+
+
 
     const resetProgress = () => {
         setSubmissions([]);
         setSubmissionIndices([]);
         setSelectedIndices([]);
         setShuffleSeed(0);
+        setGameMode('standard'); // partial reset
+        setHardModeBoard([]);
+        setSwapCount(0);
         localStorage.removeItem(STORAGE_KEY);
     };
 
@@ -248,6 +367,12 @@ export const useGameState = () => {
         resetProgress,
         gameState,
         displayLetters,
-        isLoading: !puzzle
+        isLoading: !puzzle,
+        gameMode,
+        toggleGameMode,
+        switchTiles,
+        swapCount,
+        hardModeBoard,
+        dictionary // Export dict for validation check in App/hook
     };
 };
