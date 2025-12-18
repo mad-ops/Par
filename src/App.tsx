@@ -213,22 +213,20 @@ function App() {
                   </button>
                 </>
               ) : (
-                gameMode !== 'hard' && (
-                  <>
-                    <button
-                      onClick={() => {
-                        clearSelection();
-                        setHasInteracted(true);
-                      }}
-                      className="flex-1 !h-12 min-h-[48px] bg-slate-200 rounded-xl flex items-center justify-center shadow hover:bg-slate-300 active:bg-slate-400 active:scale-95 transition-all uppercase font-black text-sm tracking-wide text-slate-700 shrink-0"
-                      style={{ height: '48px' }}
-                      aria-label="Clear Selection"
-                      disabled={isProcessing}
-                    >
-                      Clear
-                    </button>
-                  </>
-                )
+                <>
+                  <button
+                    onClick={() => {
+                      clearSelection();
+                      setHasInteracted(true);
+                    }}
+                    className="flex-1 !h-12 min-h-[48px] bg-slate-200 rounded-xl flex items-center justify-center shadow hover:bg-slate-300 active:bg-slate-400 active:scale-95 transition-all uppercase font-black text-sm tracking-wide text-slate-700 shrink-0"
+                    style={{ height: '48px' }}
+                    aria-label="Clear Selection"
+                    disabled={isProcessing}
+                  >
+                    Clear
+                  </button>
+                </>
               )}
             </div>
           )}
