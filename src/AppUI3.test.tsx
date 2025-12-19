@@ -75,7 +75,7 @@ describe('App UI - Standard Mode - Batch 3', () => {
     });
 
     // TEST 29
-    it('renders Try Hard Mode button on completion', () => {
+    it('renders Try For Perfect button on completion', () => {
         // Mock complete
     });
 

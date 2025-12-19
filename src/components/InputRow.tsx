@@ -2,7 +2,8 @@ import clsx from 'clsx';
 
 
 
-export const InputRow = ({ currentInput, isError, isSuccess, isWarning, placeholder }: { currentInput: string; isError: boolean; isSuccess?: boolean; isWarning?: boolean; placeholder?: string }) => {
+
+export const InputRow = ({ currentInput, isError, isSuccess, isWarning, isComplete, placeholder }: { currentInput: string; isError: boolean; isSuccess?: boolean; isWarning?: boolean; isComplete?: boolean; placeholder?: string }) => {
     const slots = Array(5).fill('');
 
     return (
@@ -13,19 +14,21 @@ export const InputRow = ({ currentInput, isError, isSuccess, isWarning, placehol
                     <div
                         className={clsx(
                             "w-full aspect-square flex items-center justify-center text-3xl sm:text-4xl font-black rounded-xl p-1 m-[2px] transition-all z-10",
-                            isSuccess
-                                ? "bg-green-500 text-white border-none"
-                                : isError
-                                    ? "bg-red-500 text-white border-none"
-                                    : isWarning
-                                        ? "bg-yellow-500 text-white border-none"
-                                        : i < currentInput.length
-                                            ? "card-input-filled shadow-sm"
-                                            : !currentInput && placeholder ? "bg-blue-400 text-white border-none" : "bg-transparent"
+                            isComplete
+                                ? "bg-purple-500 text-white border-none"
+                                : isSuccess
+                                    ? "bg-green-500 text-white border-none"
+                                    : isError
+                                        ? "bg-red-500 text-white border-none"
+                                        : isWarning
+                                            ? "bg-yellow-500 text-white border-none"
+                                            : i < currentInput.length
+                                                ? "card-input-filled shadow-sm"
+                                                : !currentInput && placeholder ? "bg-blue-400 text-white border-none" : "bg-transparent"
                         )}
                         style={{
-                            backgroundColor: isSuccess ? '#22c55e' : isError ? '#ef4444' : isWarning ? '#eab308' : (!currentInput && placeholder) ? '#60a5fa' : undefined,
-                            color: (isSuccess || isError || isWarning || (!currentInput && placeholder)) ? 'white' : undefined,
+                            backgroundColor: isComplete ? '#a855f7' : isSuccess ? '#22c55e' : isError ? '#ef4444' : isWarning ? '#eab308' : (!currentInput && placeholder) ? '#60a5fa' : undefined,
+                            color: (isComplete || isSuccess || isError || isWarning || (!currentInput && placeholder)) ? 'white' : undefined,
                         }}
                     >
                         {currentInput[i] || (placeholder && !currentInput ? placeholder[i] : '')}

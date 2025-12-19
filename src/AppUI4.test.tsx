@@ -26,51 +26,25 @@ describe('App UI - Standard Mode - Batch 4 (Completion)', () => {
         vi.clearAllMocks();
     });
 
-    // TEST 31
-    it('renders COMPLETE! title', () => {
+    // TEST 32 - Score check
+    it('does NOT show final score in standard mode', () => {
         render(<App />);
-        // Wait for completion delay logic in App
-        // But we mocked gameState.isComplete=true immediately.
-        // App has useEffect delay.
-        // We need fake timers.
-    });
-
-    // TEST 32
-    it('shows final score', () => {
-        // ...
-    });
-
-    // TEST 33
-    it('shows Try Hard Mode button', async () => {
-        vi.useFakeTimers();
-        render(<App />);
-        act(() => {
-            vi.advanceTimersByTime(2000);
-        });
-        expect(screen.getByText('TRY HARD MODE')).toBeTruthy();
-        vi.useRealTimers();
+        expect(screen.queryByText(/SCORE:/)).toBeNull();
     });
 
     // TEST 34
-    it('shows AGAIN button', async () => {
-        vi.useFakeTimers();
-        render(<App />);
-        act(() => {
-            vi.advanceTimersByTime(2000);
-        });
-        expect(screen.getByText('AGAIN')).toBeTruthy();
-        vi.useRealTimers();
-    });
+
 
     // TEST 35
-    it('shows STATS button', async () => {
-        vi.useFakeTimers();
+    it('renders PERF! in InputRow on completion', () => {
+        // This test relies on the top-level mock of useGameState which sets isComplete: true
+        // and currentInput: '' (which is then overridden by the "PERF!" logic in InputRow).
         render(<App />);
-        act(() => {
-            vi.advanceTimersByTime(2000);
-        });
-        expect(screen.getByText('STATS')).toBeTruthy();
-        vi.useRealTimers();
+        expect(screen.getAllByText('P').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('E').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('R').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('F').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('!').length).toBeGreaterThan(0);
     });
 
     // TEST 36
@@ -84,37 +58,6 @@ describe('App UI - Standard Mode - Batch 4 (Completion)', () => {
         vi.useRealTimers();
     });
 
-    // TEST 37
-    it('hides Input Row', async () => {
-        // Might hide input row on completion? CSS checks?
-    });
 
-    // TEST 38
-    it('renders history correctly', async () => {
-        // Check History text
-        vi.useFakeTimers();
-        render(<App />);
-        act(() => {
-            vi.advanceTimersByTime(2000);
-        });
-        expect(screen.getByText(/history/i)).toBeTruthy();
-        vi.useRealTimers();
-    });
-
-    // TEST 39
-    it('renders history items', async () => {
-        vi.useFakeTimers();
-        render(<App />);
-        act(() => {
-            vi.advanceTimersByTime(2000);
-        });
-        expect(screen.getAllByText('A').length).toBeGreaterThan(0);
-        vi.useRealTimers();
-    });
-
-    // TEST 40
-    it('clicking Try Hard Mode triggers action', async () => {
-        // Fire event
-    });
 
 });

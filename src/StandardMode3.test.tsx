@@ -46,16 +46,23 @@ describe('Standard Mode Logic - Batch 3', () => {
         // ...
     });
 
-    // TEST 23: Duplicate submission error logic
-    it('returns error when word already submitted', async () => {
+    // TEST 23: Consumed tiles interaction
+    it('prevents interaction with consumed tiles', async () => {
         const { result } = renderHook(() => useGameState());
         await waitFor(() => expect(result.current.isLoading).toBe(false));
+        // Submit first word (which consumes 0-4)
         act(() => { [0, 1, 2, 3, 4].forEach(i => result.current.handleTileClick(i)); });
         act(() => result.current.submitWord());
         act(() => result.current.clearSelection());
+
+        // Try to click 0-4 again
         act(() => { [0, 1, 2, 3, 4].forEach(i => result.current.handleTileClick(i)); });
+
+        // Should be empty
+        expect(result.current.selectedIndices).toHaveLength(0);
+
         const res = result.current.submitWord();
-        expect(res).toHaveProperty('error', 'Already used');
+        expect(res).toHaveProperty('error', 'Too short');
     });
 
     // TEST 24

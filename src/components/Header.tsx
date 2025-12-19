@@ -5,9 +5,10 @@ interface HeaderProps {
     onHardModeClick?: () => void;
     score: number;
     label?: string;
+    showScore?: boolean;
 }
 
-export const Header = ({ onInfoClick, onHardModeClick, score, label = 'Score' }: HeaderProps) => {
+export const Header = ({ onInfoClick, onHardModeClick, score, label = 'Score', showScore = true }: HeaderProps) => {
     return (
         <header className="flex items-center justify-between border-b border-par-surface max-w-lg mx-auto w-full h-16 px-4 mb-1" style={{ marginBottom: '4px' }}>
             {/* Left: Icons - Centered in specific square matching header height */}
@@ -39,8 +40,12 @@ export const Header = ({ onInfoClick, onHardModeClick, score, label = 'Score' }:
                 className="flex flex-col items-center justify-center text-white"
                 style={{ width: '80px', height: '64px' }}
             >
-                <div className="text-3xl font-black leading-none">{score}</div>
-                <div className="text-xs uppercase font-black tracking-widest opacity-80 mt-1">{label}</div>
+                {showScore && (
+                    <>
+                        <div className="text-3xl font-black leading-none">{score}</div>
+                        <div className="text-xs uppercase font-black tracking-widest opacity-80 mt-1">{label}</div>
+                    </>
+                )}
             </div>
         </header>
     );

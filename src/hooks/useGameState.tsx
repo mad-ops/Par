@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import { generatePuzzle, validateSubmission, calculateLetterUsage } from '../lib/gameLogic';
 import { loadDictionary } from '../lib/dictionary';
+import { createInitialBoard, swapRowsForSubmission, type BoardState } from '../lib/boardState'; // Import new logic
 import type { DailyPuzzle } from '../types';
 
 const STORAGE_KEY = 'par_game_state';
@@ -10,16 +11,21 @@ interface PersistedState {
     date: string;
     submissions: string[];
     submissionIndices: number[][]; // Track exact indices for each submission
+    boardState?: BoardState; // New persisted state
 }
 
 export const useGameState = () => {
     const [dictionary, setDictionary] = useState<Set<string>>(new Set());
     const [commonWords, setCommonWords] = useState<string[]>([]);
     const [submissions, setSubmissions] = useState<string[]>([]);
-    const [submissionIndices, setSubmissionIndices] = useState<number[][]>([]); // New state
+    const [submissionIndices, setSubmissionIndices] = useState<number[][]>([]);
     const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
     const [puzzle, setPuzzle] = useState<DailyPuzzle | null>(null);
     const [shuffleSeed, setShuffleSeed] = useState(0);
+
+    // Board State (Standard Mode)
+    // Initialize with empty until puzzle loads
+    const [boardState, setBoardState] = useState<BoardState | null>(null);
 
     // Hard Mode State
     const [gameMode, setGameMode] = useState<'standard' | 'hard'>('standard');
@@ -44,31 +50,38 @@ export const useGameState = () => {
 
             // Load saved state
             const saved = localStorage.getItem(STORAGE_KEY);
+            let stateLoaded = false;
+
             if (saved) {
                 try {
                     const parsed: PersistedState = JSON.parse(saved);
                     if (parsed.date === today) {
                         setSubmissions(parsed.submissions);
-                        // Backwards compatibility: if submissionIndices missing, we can't recover exact tiles effortlessly.
-                        // Ideally we'd reset or just accept we lose visual precision for old saves.
-                        // For this implementation, let's default to empty if missing, but that desyncs submissions.
-                        // Better: If missing, we might want to reset locally to avoid issues, or try to reconstruct (hard).
-                        // Let's assume reset if version mismatch (missing indices).
+
                         if (parsed.submissionIndices && parsed.submissionIndices.length === parsed.submissions.length) {
                             setSubmissionIndices(parsed.submissionIndices);
 
-                            // Check if game is complete to restore last selection state
-                            // Flatten all to check count
+                            // Load board state or create initial if missing (migration)
+                            if (parsed.boardState) {
+                                setBoardState(parsed.boardState);
+                            } else {
+                                // If no saved board state but we have progress, we might be in trouble since old progress assumes old static board.
+                                // For robustness, if migrating, we might just have to reset or try to reconstruct.
+                                // Simplest: Start fresh board. Visuals might be weird if letters moved, but functional.
+                                setBoardState(createInitialBoard(p.letters));
+                            }
+
                             const all = new Set(parsed.submissionIndices.flat());
                             if (all.size === 25 && parsed.submissionIndices.length > 0) {
-                                // Restore last selection for visual continuity
                                 setSelectedIndices(parsed.submissionIndices[parsed.submissionIndices.length - 1]);
                             }
                         } else {
-                            // If we have submissions but no indices (legacy save), best to reset to avoid "ghost" consumption.
+                            // Version mismatch reset
                             setSubmissions([]);
                             setSubmissionIndices([]);
+                            setBoardState(createInitialBoard(p.letters));
                         }
+                        stateLoaded = true;
                     } else {
                         localStorage.removeItem(STORAGE_KEY);
                     }
@@ -76,44 +89,50 @@ export const useGameState = () => {
                     console.error("Failed to parse saved state", e);
                 }
             }
+
+            if (!stateLoaded) {
+                setBoardState(createInitialBoard(p.letters));
+            }
         }
     }, [commonWords, today]);
 
     // Persist
     useEffect(() => {
-        if (puzzle) {
-            const state: PersistedState = { date: today, submissions, submissionIndices };
-            // TODO: Persist hard mode state? For now, transient.
+        if (puzzle && boardState) {
+            const state: PersistedState = {
+                date: today,
+                submissions,
+                submissionIndices,
+                boardState
+            };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         }
-    }, [submissions, submissionIndices, puzzle, today]);
+    }, [submissions, submissionIndices, puzzle, today, boardState]);
 
     const toggleGameMode = () => {
         if (!puzzle) return;
 
         if (gameMode === 'hard') {
-            // Switch back to standard
-            // Reset hard mode state
             setHardModeBoard([]);
             setSwapCount(0);
-            // Reset standard progress as well to start fresh? 
-            // Current "resetProgress" does full wipe.
-            // Let's do a partial reset similar to resetProgress but keeping puzzle
+
+            // Standard Reset
             setSubmissions([]);
             setSubmissionIndices([]);
             setSelectedIndices([]);
             setShuffleSeed(0);
+            setBoardState(createInitialBoard(puzzle.letters));
             setGameMode('standard');
         } else {
-            // Start Hard Mode
             setGameMode('hard');
-            setHardModeBoard([...puzzle.letters]); // Copy initial state
+            setHardModeBoard([...puzzle.letters]);
 
             setSwapCount(0);
-            setSelectedIndices([]); // Clear standard selection
-            // Reset standard progress? User said "new game".
+            setSelectedIndices([]);
             setSubmissions([]);
             setSubmissionIndices([]);
+            // Board state for Standard irrelevant in Hard, but we keep it sync logic separate ? 
+            // Actually hard mode doesn't use boardState, it uses hardModeBoard.
         }
     };
 
@@ -127,37 +146,42 @@ export const useGameState = () => {
     };
 
     const submitWord = () => {
-        if (!puzzle) return;
+        if (!puzzle || !boardState) return;
 
-        const word = selectedIndices.map(idx => puzzle.letters[idx]).join('').toUpperCase();
+        // Use boardState.letters for current word construction
+        const word = selectedIndices.map(idx => boardState.letters[idx]).join('').toUpperCase();
 
         if (word.length !== 5) return { error: 'Too short' };
         if (!dictionary.has(word)) return { error: 'Not in dictionary' };
         if (submissions.includes(word)) return { error: 'Already used' };
 
-        // Validate against board - implicitly valid if built from board indices
-
-        // Additional check: Ensure we aren't using already consumed tiles?
-        // Game rule: "Duplicate letters fully consumed" -> "Letters on the board highlight when consumed".
-        // Can we reuse a consumed tile? "Over-usage allowed but inefficient".
-        // Use case: I have 2 'E's. I use one. It turns green. Can I use it again?
-        // If I use it again, I'm just increasing my score (bad) without gaining new coverage.
-        // It is ALLOWED. So no check against previous indices needed.
-
-        // Final check just in case
-        const validation = validateSubmission(word, puzzle.letters);
+        const validation = validateSubmission(word, boardState.letters);
         if (validation.error) return validation;
 
-        // Check if this submission completes the game
+        // Perform Board Swap Logic
+        const targetRow = submissions.length; // 0, 1, 2, 3, 4
+
+        const { newBoard, newSubmissionIndices } = swapRowsForSubmission(
+            boardState,
+            selectedIndices, // Current indices of the word letters
+            targetRow
+        );
+
+        setBoardState(newBoard);
+        setSubmissions(prev => [...prev, word]);
+
+        // We accumulate the NEW static indices for this word
+        setSubmissionIndices(prev => [...prev, newSubmissionIndices]);
+
+        // Also update selection to match the new positions so UI doesn't jump
+        // Wait, UI will re-render. We probably want to clear selection or update it?
+        // App logic might clear it later.
+
         const previouslyConsumed = new Set(submissionIndices.flat());
-        // Add new indices
-        selectedIndices.forEach(idx => previouslyConsumed.add(idx));
+        newSubmissionIndices.forEach(idx => previouslyConsumed.add(idx));
+
         const isNowComplete = previouslyConsumed.size === 25;
 
-        setSubmissions(prev => [...prev, word]);
-        setSubmissionIndices(prev => [...prev, [...selectedIndices]]); // Save indices
-
-        // Note: We no longer clear selection here to allow UI to show success state first.
         return { success: true, isComplete: isNowComplete };
     };
 
@@ -165,20 +189,14 @@ export const useGameState = () => {
         if (gameState.isComplete) return;
 
         if (gameMode === 'hard') {
-            // Hard Mode Interaction: Swap
             if (selectedIndices.length === 0) {
-                // Select first tile
                 setSelectedIndices([index]);
             } else {
                 const firstIndex = selectedIndices[0];
                 if (firstIndex === index) {
-                    // Deselect if same
                     setSelectedIndices([]);
                 } else {
-                    // Highlight both
                     setSelectedIndices([firstIndex, index]);
-
-                    // Delayed Swap
                     setTimeout(() => {
                         switchTiles(firstIndex, index);
                         setSelectedIndices([]);
@@ -187,27 +205,28 @@ export const useGameState = () => {
             }
             return;
         }
+
+        // Standard Mode Click
         if (gameState.isComplete) return;
 
-        // Smart Selection Logic
-        let targetIndex = index;
-        const clickedLetter = displayLetters.find(l => l.id === index);
-
-        // If clicking a consumed tile, try to find an available one of same letter
-        if (clickedLetter?.status === 'consumed') {
-            const availableInstance = displayLetters.find(l =>
-                l.char === clickedLetter.char &&
-                l.status === 'available' &&
-                // If resetting, ignore current selection check. Otherwise check if not selected.
-                (shouldReset || !selectedIndices.includes(l.id))
-            );
-            if (availableInstance) {
-                targetIndex = availableInstance.id;
-            }
+        // Check if consumed (locked)
+        // Consumed indices are strictly those in submissionIndices
+        const flattenedConsumed = new Set(submissionIndices.flat());
+        if (flattenedConsumed.has(index)) {
+            // Block click on consumed tile
+            return;
         }
 
+        // Smart Selection Logic (Simplified since we can't move consumed tiles)
+        let targetIndex = index;
+
+        // Auto-select unconsumed duplicates? 
+        // User said: "User should not be able to select a consumed letter anymore".
+        // So we definitely don't auto-jump FROM a consumed letter because you can't click it.
+        // But what if we click an Available letter, do we jump?
+        // Basic selection logic applies.
+
         if (shouldReset) {
-            // Force selection to just this tile
             setSelectedIndices([targetIndex]);
             return;
         }
@@ -239,9 +258,25 @@ export const useGameState = () => {
         setShuffleSeed(s => s + 1);
     };
 
+    const resetProgress = () => {
+        setSubmissions([]);
+        setSubmissionIndices([]);
+        setSelectedIndices([]);
+        setShuffleSeed(0);
+        setGameMode('standard');
+        setHardModeBoard([]);
+        setSwapCount(0);
+
+        // Reset board to initial puzzle state
+        if (puzzle) {
+            setBoardState(createInitialBoard(puzzle.letters));
+        }
+        localStorage.removeItem(STORAGE_KEY);
+    };
+
     // Derived state
     const gameState = useMemo(() => {
-        if (!puzzle) return { isComplete: false, capturedCounts: {}, score: 0 };
+        if (!puzzle || !boardState) return { isComplete: false, capturedCounts: {}, score: 0 };
 
         if (gameMode === 'hard') {
             let isComplete = false;
@@ -263,17 +298,16 @@ export const useGameState = () => {
         }
 
         // Standard Logic
-        // Check completion based on indices coverage (which tracks visual state)
         const allConsumedIndices = new Set(submissionIndices.flat());
         const isComplete = allConsumedIndices.size === 25;
 
-        // Construct current partial word from selected indices
-        const currentWord = selectedIndices.map(idx => puzzle.letters[idx]).join('');
-
-        // Include current (partial) word in the calc to show live score
+        // Use boardState letters
+        const currentWord = selectedIndices.map(idx => boardState.letters[idx]).join('');
         const allWordsToScore = (currentWord && !isComplete) ? [...submissions, currentWord] : submissions;
 
-        // Use centralized logic from gameLogic.ts to ensure consistency
+        // We use puzzle.letters for scoring reference? Or boardState?
+        // Scoring should be consistent. puzzle.letters is the "bag". boardState is just rearrangement.
+        // calculateLetterUsage uses counts. Counts are invariant under swap.
         const logicState = calculateLetterUsage(puzzle.letters, allWordsToScore);
 
         return {
@@ -281,22 +315,19 @@ export const useGameState = () => {
             score: logicState.score,
             capturedCounts: logicState.capturedCounts
         };
-    }, [puzzle, submissions, submissionIndices, selectedIndices, gameMode, hardModeBoard, swapCount, dictionary]);
+    }, [puzzle, submissions, submissionIndices, selectedIndices, gameMode, hardModeBoard, swapCount, dictionary, boardState]);
 
     const displayLetters = useMemo(() => {
-        if (!puzzle) return [];
+        if (!puzzle || !boardState) return [];
 
         if (gameMode === 'hard') {
-            // Hard Mode Logic
-            // 1. Identify valid rows
+            // Hard Mode Display Logic (unchanged from original except for vars)
             const validIndices = new Set<number>();
             let validRowCount = 0;
-
             for (let row = 0; row < 5; row++) {
                 const startIndex = row * 5;
                 const rowLetters = hardModeBoard.slice(startIndex, startIndex + 5);
                 const word = rowLetters.join('').toUpperCase();
-
                 if (dictionary.has(word)) {
                     validRowCount++;
                     for (let i = 0; i < 5; i++) {
@@ -304,8 +335,6 @@ export const useGameState = () => {
                     }
                 }
             }
-
-            // 2. Map to items
             return hardModeBoard.map((char, index) => ({
                 char,
                 status: (validIndices.has(index) ? 'consumed' : 'available') as 'consumed' | 'available',
@@ -313,13 +342,13 @@ export const useGameState = () => {
             }));
         }
 
-        // Standard Logic
-        // Flatten consumed indices for O(1) lookup
+        // Standard Mode - Use BoardState
         const consumedSet = new Set(submissionIndices.flat());
 
-        let items = puzzle.letters.map((char, index) => {
+        // We only shuffle AVAILABLE tiles.
+        // Map 0..24 to their items.
+        let items = boardState.letters.map((char, index) => {
             let status: 'available' | 'consumed' = 'available';
-
             if (consumedSet.has(index)) {
                 status = 'consumed';
             }
@@ -327,52 +356,94 @@ export const useGameState = () => {
         });
 
         if (shuffleSeed > 0) {
-            // Seeded random sort
+            // Only sort items that are available? 
+            // If we sort all, the grid jumps around.
+            // Consumed items (rows 0, 1, 2...) should stay FIXED.
+            // Unconsumed items can shuffle among themselves.
+
+            // Separate
+            const fixedItems = items.filter(item => item.status === 'consumed');
+            const shuffleItems = items.filter(item => item.status === 'available');
+
             const seedRandom = (i: number) => {
                 const x = Math.sin(shuffleSeed + i) * 10000;
                 return x - Math.floor(x);
             };
-            items = [...items].sort((a, b) => seedRandom(a.id) - seedRandom(b.id));
+
+            // Shuffle the available items
+            // But waiting, their IDs MUST enable mapping back to handleTileClick logic.
+            // ID = Board Index.
+            // If we visual-shuffle, does ID stay tied to the visual slot?
+            // "ID" usually means "Index in the primary state array".
+            // DisplayLetters usually maps to the grid slots in order.
+            // If we sort the ARRAY, we change which tile appears in slot X.
+            // E.g. Slot 24 might show Tile 10.
+            // If user clicks Slot 24, they expect to click Tile 10.
+            // UI usually iterates displayLetters and renders.
+            // The Key/ID passed to onClick is `item.id`.
+
+            // So if we shuffle the array passed to GameBoard:
+            // GameBoard maps `displayLetters.map(...)`.
+            // So visual order follows array order.
+
+            // We want FIXED items to stay in their slots.
+            // We want AVAILABLE items to move around into AVAILABLE slots.
+
+            // Complex shuffle for partial board:
+            // 1. Get indices of available slots.
+            // 2. Shuffle those indices? No, shuffle the ITEMS into those slots.
+
+            const availableSlots = items
+                .map((item, idx) => ({ item, originalIdx: idx }))
+                .filter(x => x.item.status === 'available');
+
+            // Sort these available items/slots based on randomized criteria
+            const shuffledAvailable = [...availableSlots].sort((a, b) => seedRandom(a.item.id) - seedRandom(b.item.id));
+
+            // Reconstruct the full list
+            // Create a sparse array or map?
+
+            // Better: Just map available slots one-to-one to the shuffled items.
+            // The available items occupy specific INDICES in the main array.
+            // We want to permute contents among those indices.
+
+            // Let's create a copy
+            const finalItems = [...items];
+
+            // For each available slot (in original order), place the next item from shuffled list
+            for (let i = 0; i < availableSlots.length; i++) {
+                const targetSlotIndex = availableSlots[i].originalIdx;
+                const itemToPlace = shuffledAvailable[i].item;
+                finalItems[targetSlotIndex] = itemToPlace;
+            }
+
+            items = finalItems;
         }
 
         return items;
-    }, [puzzle, submissionIndices, shuffleSeed, gameMode, hardModeBoard, dictionary]);
+    }, [puzzle, submissionIndices, shuffleSeed, gameMode, hardModeBoard, dictionary, boardState]);
 
-
-
-    const resetProgress = () => {
-        setSubmissions([]);
-        setSubmissionIndices([]);
-        setSelectedIndices([]);
-        setShuffleSeed(0);
-        setGameMode('standard'); // partial reset
-        setHardModeBoard([]);
-        setSwapCount(0);
-        localStorage.removeItem(STORAGE_KEY);
-    };
-
-    // Derived current input string for display
-    const currentInput = selectedIndices.map(idx => puzzle?.letters[idx] || '').join('');
+    const currentInput = selectedIndices.map(idx => boardState?.letters[idx] || '').join('');
 
     return {
         puzzle,
         submissions,
-        currentInput, // Kept for compatibility with InputRow
-        selectedIndices, // New
-        handleTileClick, // New
-        clearSelection, // New
-        backspace, // New
+        currentInput,
+        selectedIndices,
+        handleTileClick,
+        clearSelection,
+        backspace,
         submitWord,
         shuffleBoard,
         resetProgress,
         gameState,
         displayLetters,
-        isLoading: !puzzle,
+        isLoading: !puzzle || !boardState,
         gameMode,
         toggleGameMode,
         switchTiles,
         swapCount,
         hardModeBoard,
-        dictionary // Export dict for validation check in App/hook
+        dictionary
     };
 };

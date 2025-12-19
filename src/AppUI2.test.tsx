@@ -34,15 +34,15 @@ describe('App UI - Standard Mode - Batch 2', () => {
     });
 
     // TEST 12
-    it('renders score derived from hook', () => {
+    it('does NOT render score derived from hook', () => {
         render(<App />);
-        expect(screen.getByText('10')).toBeTruthy();
+        expect(screen.queryByText('10')).toBeNull();
     });
 
     // TEST 13
-    it('renders submission count', () => {
+    it('does NOT render submission count', () => {
         render(<App />);
-        expect(screen.getByText('Count: 1')).toBeTruthy();
+        expect(screen.queryByText(/Count:/i)).toBeNull();
     });
 
     // TEST 14
@@ -75,9 +75,9 @@ describe('App UI - Standard Mode - Batch 2', () => {
     });
 
     // TEST 18
-    it('shows header label SCORE', () => {
+    it('does NOT show header label SCORE', () => {
         render(<App />);
-        expect(screen.getByText('SCORE')).toBeTruthy();
+        expect(screen.queryByText('SCORE')).toBeNull();
     });
 
     // TEST 19

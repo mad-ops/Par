@@ -27,9 +27,10 @@ describe('App UI - Standard Mode - Batch 5', () => {
     });
 
     // TEST 41
+    // TEST 41
     it('renders Header', () => {
         render(<App />);
-        expect(screen.getByText(/SCORE|SWAPS/)).toBeTruthy();
+        expect(screen.getByText('Par')).toBeTruthy();
     });
 
     // TEST 42
@@ -44,7 +45,7 @@ describe('App UI - Standard Mode - Batch 5', () => {
     // TEST 43
     it('header has correct background/border', () => {
         render(<App />);
-        const header = screen.getByText(/SCORE|SWAPS/);
+        const header = screen.getByRole('banner');
         expect(header).toBeTruthy();
     });
 

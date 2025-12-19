@@ -120,19 +120,24 @@ describe('Standard Mode Logic - Basic', () => {
     });
 
     // TEST 10
-    it('prevents duplicate word submission', async () => {
+    it('prevents selecting consumed tiles', async () => {
         const { result } = renderHook(() => useGameState());
         await waitFor(() => expect(result.current.isLoading).toBe(false));
         act(() => {
             [0, 1, 2, 3, 4].forEach(i => result.current.handleTileClick(i));
         });
         act(() => result.current.submitWord());
-        act(() => result.current.clearSelection()); // should happen in UI but manual here
+        act(() => result.current.clearSelection());
 
+        // Try to select same tiles again
         act(() => {
             [0, 1, 2, 3, 4].forEach(i => result.current.handleTileClick(i));
         });
+        // Should ignore clicks on consumed tiles
+        expect(result.current.selectedIndices).toEqual([]);
+
+        // Submitting now would result in 'Too short'
         const res = result.current.submitWord();
-        expect(res).toEqual({ error: 'Already used' });
+        expect(res).toEqual({ error: 'Too short' });
     });
 });

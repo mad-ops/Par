@@ -1,9 +1,9 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { useGameState } from './hooks/useGameState';
 import { GameBoard } from './components/GameBoard';
 import { InputRow } from './components/InputRow';
 import { Header } from './components/Header';
-import { CompletionScreen } from './components/CompletionScreen';
 
 function App() {
   const {
@@ -31,9 +31,8 @@ function App() {
   const [successPop, setSuccessPop] = useState(false);
   const [warningShake, setWarningShake] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showPostGameControls, setShowPostGameControls] = useState(false);
-  const [showCompletion, setShowCompletion] = useState(false);
   const [hasInteracted, setHasInteracted] = useState(false);
+  const [frozenInput, setFrozenInput] = useState(''); // New state to hold input during success animation
 
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -46,13 +45,15 @@ function App() {
 
       if (res && 'success' in res && res.success) {
         // Success: Green flash -> Clear
+        setFrozenInput(currentInput); // Capture valid word before board swap render update
         setSuccessPop(true);
+        clearSelection(); // Clear selection immediately to remove board styling
+
         feedbackTimerRef.current = setTimeout(() => {
           setSuccessPop(false);
-          // Only clear if the game is NOT complete
-          if (!res.isComplete) {
-            clearSelection();
-          }
+          setFrozenInput(''); // Clear frozen input after animation
+
+          // Only clear if the game is NOT complete (actually already cleared above)
           setIsProcessing(false);
           feedbackTimerRef.current = null;
         }, 2000); // 2 seconds green
@@ -94,19 +95,9 @@ function App() {
     };
   }, []);
 
-  // Completion Delay
-  useEffect(() => {
-    if (gameState.isComplete) {
-      const timer = setTimeout(() => {
-        setShowCompletion(true);
-        setShowPostGameControls(true);
-      }, 1000); // 1 second delay
-      return () => clearTimeout(timer);
-    } else {
-      setShowCompletion(false);
-      setShowPostGameControls(false);
-    }
-  }, [gameState.isComplete]);
+
+  // Completion Delay Removed - Immediate In-Place Feedback
+
 
   if (isLoading || !puzzle) {
     return <div className="h-screen flex items-center justify-center">Loading...</div>;
@@ -125,6 +116,7 @@ function App() {
       setSuccessPop(false);
       setErrorShake(false);
       setWarningShake(false);
+      setFrozenInput(''); // Clear frozen input
       clearSelection();
       // Allow processing to stop so we can interact again immediately
       setIsProcessing(false);
@@ -135,7 +127,6 @@ function App() {
     }
 
     // Pass through to game logic
-    // Pass through to game logic
     if (!hasInteracted) setHasInteracted(true);
     handleTileClick(index);
   };
@@ -143,24 +134,17 @@ function App() {
   return (
     <div className="min-h-screen bg-par-bg flex flex-col items-center relative overflow-hidden">
       {/* Completion Overlay */}
-      {/* Completion Overlay */}
-      {showCompletion && (
-        <CompletionScreen
-          score={gameState.score}
-          submissions={submissions}
-          onClose={() => setShowCompletion(false)}
-          isComplete={gameState.isComplete}
-          onRestart={resetProgress}
-          onStartHardMode={toggleGameMode}
-          isHardMode={gameMode === 'hard'}
-        />
-      )}
+      {/* Completion Overlay Removed - Replaced by PERF! state */}
+
+      {/* Header */}
 
       <Header
-        onInfoClick={() => setShowCompletion(true)}
+        onInfoClick={() => { }} // Disabled modal info click for now? Or restore modal? User said "Do not show modal on completion". Info click usually shows instructions.
         onHardModeClick={toggleGameMode}
+
         score={gameState.score}
         label={gameMode === 'hard' ? 'SWAPS' : 'SCORE'}
+        showScore={gameMode === 'hard'}
       />
 
       <main className="flex-1 w-full max-w-lg px-4 py-2 flex flex-col">
@@ -169,11 +153,12 @@ function App() {
 
           {gameMode !== 'hard' && (
             <InputRow
-              currentInput={currentInput}
+              currentInput={gameState.isComplete ? 'PERF!' : (frozenInput || currentInput)}
               isError={errorShake}
-              isSuccess={successPop || gameState.isComplete}
+              isSuccess={successPop}
               isWarning={warningShake}
-              placeholder={(!hasInteracted && submissions.length === 0) ? "GUESS" : undefined}
+              isComplete={gameState.isComplete}
+              placeholder={(!hasInteracted && gameMode !== 'hard') ? 'GUESS' : undefined}
             />
           )}
 
@@ -184,17 +169,12 @@ function App() {
             isHardMode={gameMode === 'hard'}
           />
 
-          {/* Count */}
-          {gameMode !== 'hard' && (
-            <div className="flex items-center justify-center text-xl font-bold uppercase tracking-widest text-slate-500 mt-4" style={{ height: '48px' }}>
-              Count: {submissions.length}
-            </div>
-          )}
+
 
           {/* Control Bar - Dynamic based on state */}
           {gameMode !== 'hard' && (
-            <div className="flex justify-center gap-2 w-full max-w-[400px] mt-4 z-10" style={{ gap: '8px' }}>
-              {showPostGameControls ? (
+            <div className="flex justify-center gap-2 w-full max-w-[400px] z-10" style={{ gap: '8px', marginTop: '4px' }}>
+              {gameState.isComplete ? (
                 <>
                   <button
                     onClick={resetProgress}
@@ -202,14 +182,6 @@ function App() {
                     style={{ height: '48px' }}
                   >
                     AGAIN
-                  </button>
-
-                  <button
-                    onClick={() => setShowCompletion(true)}
-                    className="flex-1 !h-12 min-h-[48px] bg-slate-200 rounded-xl flex items-center justify-center shadow hover:bg-slate-300 active:bg-slate-400 active:scale-95 transition-all uppercase font-black text-sm tracking-wide text-slate-700 shrink-0"
-                    style={{ height: '48px' }}
-                  >
-                    STATS
                   </button>
                 </>
               ) : (
@@ -226,14 +198,21 @@ function App() {
                   >
                     Clear
                   </button>
+                  <button
+                    onClick={resetProgress}
+                    className="flex-1 !h-12 min-h-[48px] bg-slate-200 rounded-xl flex items-center justify-center shadow hover:bg-slate-300 active:bg-slate-400 active:scale-95 transition-all uppercase font-black text-sm tracking-wide text-slate-700 shrink-0"
+                    style={{ height: '48px' }}
+                  >
+                    RESET
+                  </button>
                 </>
               )}
             </div>
           )}
 
         </div>
-      </main>
-    </div>
+      </main >
+    </div >
   );
 }
 
